@@ -46,8 +46,6 @@ typeracer/
 │   │   │   └── useSocket.ts      # Socket.IO connection wrapper
 │   │   ├── types/
 │   │   │   └── index.ts          # Shared frontend types & interfaces
-│   │   ├── data/
-│   │   │   └── paragraphs.ts     # Static list of paragraphs by word count
 │   │   └── App.tsx
 │
 ├── server/                   # Node.js backend
