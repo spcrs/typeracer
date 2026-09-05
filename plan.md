@@ -10,10 +10,10 @@ A real-time typing race application built with **React** (frontend) and **Node.j
 
 | Layer | Technology |
 |---|---|
-| Frontend | React (Vite) |
-| Backend | Node.js + Express |
+| Frontend | React (Vite) + TypeScript |
+| Backend | Node.js + Express + TypeScript |
 | Real-time | Socket.IO |
-| State (server) | In-memory (JS objects/Maps) |
+| State (server) | In-memory (TS objects/Maps) |
 | State (client) | React state / Context |
 | Styling | TailwindCSS |
 
@@ -40,21 +40,25 @@ typeracer/
 │   │   │       ├── ProgressBar/  # Per-user progress bar
 │   │   │       └── WPMDisplay/   # Words per minute display
 │   │   ├── context/
-│   │   │   └── AppContext.jsx    # Nickname, socket, global state
+│   │   │   └── AppContext.tsx    # Nickname, socket, global state
 │   │   ├── hooks/
-│   │   │   ├── useTyping.js      # Typing logic, WPM, error tracking
-│   │   │   └── useSocket.js      # Socket.IO connection wrapper
+│   │   │   ├── useTyping.ts      # Typing logic, WPM, error tracking
+│   │   │   └── useSocket.ts      # Socket.IO connection wrapper
+│   │   ├── types/
+│   │   │   └── index.ts          # Shared frontend types & interfaces
 │   │   ├── data/
-│   │   │   └── paragraphs.js     # Static list of paragraphs by word count
-│   │   └── App.jsx
+│   │   │   └── paragraphs.ts     # Static list of paragraphs by word count
+│   │   └── App.tsx
 │
 ├── server/                   # Node.js backend
-│   ├── index.js              # Express + Socket.IO entry point
-│   ├── rooms.js              # In-memory room store
-│   ├── paragraphs.js         # Static paragraph data (mirrored)
+│   ├── index.ts              # Express + Socket.IO entry point
+│   ├── rooms.ts              # In-memory room store
+│   ├── paragraphs.ts         # Static paragraph data (mirrored)
+│   ├── types/
+│   │   └── index.ts          # Shared backend types & interfaces
 │   └── socket/
-│       ├── soloHandlers.js   # Solo mode socket events
-│       └── teamHandlers.js   # Team mode socket events
+│       ├── soloHandlers.ts   # Solo mode socket events
+│       └── teamHandlers.ts   # Team mode socket events
 ```
 
 ---
@@ -154,29 +158,39 @@ typeracer/
 ## Data Models (In-Memory, Server)
 
 ### Room Object
-```js
-{
-  id: "A3F9KL",
-  adminId: "socket-id",
-  settings: {
-    wordCount: 200,       // chosen by admin
-    timeLimit: 180,       // in seconds
-  },
-  paragraph: "...",       // selected from static list based on wordCount
-  users: {
-    "socket-id": {
-      nickname: "speedster",
-      progress: 0,        // % of paragraph completed (0–100)
-      wpm: 0,
-      accuracy: 0,
-      finishedAt: null,   // timestamp or null
-      status: "racing"    // "racing" | "finished"
-    }
-  },
-  status: "lobby",        // "lobby" | "racing" | "finished"
-  startedAt: null,        // timestamp
-  timerRef: null          // server-side setInterval reference
+```ts
+// types/index.ts (shared between server modules)
+
+type RoomStatus = "lobby" | "racing" | "finished";
+type UserStatus = "racing" | "finished";
+
+interface RoomUser {
+  nickname: string;
+  progress: number;       // % of paragraph completed (0–100), words-based
+  wpm: number;
+  accuracy: number;
+  finishedAt: number | null;  // timestamp (Date.now()) or null
+  status: UserStatus;
 }
+
+interface RoomSettings {
+  wordCount: number;      // chosen by admin, max 500
+  timeLimit: number;      // in seconds, max 300
+}
+
+interface Room {
+  id: string;             // 6-char alphanumeric e.g. "A3F9KL"
+  adminId: string;        // socket ID of the admin
+  settings: RoomSettings;
+  paragraph: string;      // selected from static list based on wordCount
+  users: Map<string, RoomUser>;  // keyed by socket ID
+  status: RoomStatus;
+  startedAt: number | null;      // timestamp or null
+  timerRef: ReturnType<typeof setInterval> | null;
+}
+
+// In-memory store
+const rooms = new Map<string, Room>();
 ```
 
 ---
@@ -217,9 +231,16 @@ typeracer/
 - When a room is created, server picks the closest paragraph to the admin's chosen word count.
 - For solo mode, a random paragraph is picked.
 
-```js
-// Example structure
-const paragraphs = [
+```ts
+// paragraphs.ts (same structure used on both client and server)
+
+interface Paragraph {
+  id: number;
+  wordCount: number;
+  text: string;
+}
+
+const paragraphs: Paragraph[] = [
   { id: 1, wordCount: 50, text: "The quick brown fox..." },
   { id: 2, wordCount: 100, text: "In the beginning..." },
   // ...up to 500 words
@@ -248,11 +269,13 @@ Progress % = (number of correctly completed words / total words in paragraph) * 
 ## Build Phases
 
 ### Phase 1 — Foundation
-- [ ] Set up Vite React project and Node/Express server
-- [ ] Install and configure Socket.IO on both ends
+- [ ] Set up Vite React + TypeScript project (`--template react-ts`)
+- [ ] Set up Node/Express server with TypeScript (`ts-node` + `tsconfig.json`)
+- [ ] Install and configure Socket.IO on both ends with typed events (`socket.io` + `socket.io-client`)
+- [ ] Define shared types/interfaces in `types/index.ts` on both client and server
 - [ ] Build Nickname entry screen
 - [ ] Build Home screen (mode selection)
-- [ ] Create static paragraph data file
+- [ ] Create static paragraph data file (`paragraphs.ts`)
 
 ### Phase 2 — Solo Mode
 - [ ] Build core TypingBox component with real-time character validation
