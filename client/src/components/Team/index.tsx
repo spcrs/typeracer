@@ -5,6 +5,7 @@ import { CreateRoom } from "./CreateRoom";
 import { JoinRoom } from "./JoinRoom";
 import { Lobby } from "./Lobby";
 import { LiveRace } from "./Race";
+import { Leaderboard } from "./Leaderboard";
 import { useRoom } from "../../context/userRoomContext";
 
 const TeamFlow: React.FC = () => {
@@ -20,7 +21,7 @@ const TeamFlow: React.FC = () => {
       return <LiveRace />;
     }
     if (phase === "leaderboard") {
-      return <div className="text-white text-center">Leaderboard arriving in Phase 5...</div>;
+      return <Leaderboard />;
     }
   }
 

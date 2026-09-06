@@ -10,6 +10,7 @@ import {
   getRoom,
   usersMapToObject,
   removeUserFromRoom,
+  rooms,
 } from "../rooms";
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
@@ -141,10 +142,7 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
       );
 
       if (remaining <= 0 || allFinished) {
-        if (room.timerRef) clearInterval(room.timerRef);
-        room.status = "finished";
-        const leaderboard = generateLeaderboard(cleanRoomId);
-        io.to(cleanRoomId).emit("race:end", { leaderboard });
+        finalizeAndTeardownRoom(cleanRoomId, io);
       }
     }, 1000);
   });
@@ -192,10 +190,7 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
       );
 
       if (allFinished) {
-        if (room.timerRef) clearInterval(room.timerRef);
-        room.status = "finished";
-        const leaderboard = generateLeaderboard(cleanRoomId);
-        io.to(cleanRoomId).emit("race:end", { leaderboard });
+        finalizeAndTeardownRoom(cleanRoomId, io);
       }
     }
   });
@@ -235,4 +230,31 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
       });
     }
   }
+};
+
+// Helper to dismantle the room after broadcasting results
+const finalizeAndTeardownRoom = (cleanRoomId: string, io: TypedServer) => {
+  const room = getRoom(cleanRoomId);
+  if (!room || room.status === "finished") return;
+
+  room.status = "finished";
+  if (room.timerRef) {
+    clearInterval(room.timerRef);
+    room.timerRef = null;
+  }
+
+  const leaderboard = generateLeaderboard(cleanRoomId);
+  io.to(cleanRoomId).emit("race:end", { leaderboard });
+
+  // Disassociate socket data references
+  room.users.forEach((_user, socketId) => {
+    const s = io.sockets.sockets.get(socketId);
+    if (s) {
+      s.data.roomId = undefined;
+      s.leave(cleanRoomId);
+    }
+  });
+
+  // Remove room from in-memory Map
+  rooms.delete(cleanRoomId);
 };
