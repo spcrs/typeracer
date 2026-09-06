@@ -3,7 +3,8 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import type { ClientToServerEvents, ServerToClientEvents, SocketData } from "./types/index";
-import { registerSoloHandlers } from "./socket/soloHandler";
+import { registerSoloHandlers } from "./socket/soloHandlers";
+import { registerTeamHandlers } from "./socket/teamHandlers";
 
 const app = express();
 app.use(cors());
@@ -21,7 +22,7 @@ io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
   registerSoloHandlers(io, socket);
-
+  registerTeamHandlers(io, socket);
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${socket.id}`);
   });

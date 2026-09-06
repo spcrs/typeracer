@@ -4,6 +4,7 @@ import { useApp } from './context/useAppContext';
 import { NicknameScreen } from './components/Nickname';
 import { HomeScreen } from './components/Home';
 import { SoloScreen } from './components/Solo';
+import { TeamScreen } from './components/Team';
 
 const MainView: React.FC = () => {
   const { currentScreen, isConnected, nickname, setCurrentScreen } = useApp();
@@ -46,9 +47,7 @@ const MainView: React.FC = () => {
         {currentScreen === 'nickname' && <NicknameScreen />}
         {currentScreen === 'home' && <HomeScreen />}
         {currentScreen === 'solo' && <SoloScreen />}
-        {currentScreen === 'team' && (
-          <div className="text-center text-slate-400">Team Screen (Phase 3)</div>
-        )}
+        {currentScreen === 'team' && <TeamScreen />}
       </main>
 
       {/* Footer */}
