@@ -13,6 +13,7 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [phase, setPhase] = useState<RoomPhase>("lobby");
   const [timeLimit, setTimeLimit] = useState(120);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [rematchAvailable, setRematchAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setParagraph(data.paragraph);
       setIsAdmin(true);
       setPhase("lobby");
+      setRematchAvailable(false);
       setError(null);
       setUsers({
         [socket.id || "admin"]: {
@@ -42,8 +44,8 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setRoomId(data.roomId);
       setParagraph(data.paragraph);
       setUsers(data.users);
-      setIsAdmin(false);
       setPhase("lobby");
+      setRematchAvailable(false);
       setError(null);
     };
 
@@ -54,6 +56,7 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const handleRaceStart = (data: { startedAt: number; timeLimit: number }) => {
       setTimeLimit(data.timeLimit);
       setPhase("countdown");
+      setRematchAvailable(false); // Can no longer rejoin previous match
     };
 
     const handleRaceUpdate = (data: { users: Record<string, RoomUser> }) => {
@@ -65,10 +68,17 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setPhase("leaderboard");
     };
 
+    const handleRematchReady = () => {
+      setRematchAvailable(true);
+    };
+
+    const handleRoomClosed = (data: { message: string }) => {
+      setRematchAvailable(false);
+      setError(data.message);
+    };
+
     const handleRoomError = (data: { message: string }) => {
       setError(data.message);
-      setRoomId(null);
-      setPhase("lobby");
     };
 
     socket.on("room:created", handleRoomCreated);
@@ -77,6 +87,8 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     socket.on("race:start", handleRaceStart);
     socket.on("race:update", handleRaceUpdate);
     socket.on("race:end", handleRaceEnd);
+    socket.on("room:rematch_ready", handleRematchReady);
+    socket.on("room:closed", handleRoomClosed);
     socket.on("room:error", handleRoomError);
 
     return () => {
@@ -86,6 +98,8 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       socket.off("race:start", handleRaceStart);
       socket.off("race:update", handleRaceUpdate);
       socket.off("race:end", handleRaceEnd);
+      socket.off("room:rematch_ready", handleRematchReady);
+      socket.off("room:closed", handleRoomClosed);
       socket.off("room:error", handleRoomError);
     };
   }, [socket, nickname]);
@@ -118,6 +132,18 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const requestRematch = () => {
+    if (roomId && isAdmin) {
+      socket.emit("room:rematch", { roomId });
+    }
+  };
+
+  const rejoinLobby = () => {
+    if (roomId) {
+      socket.emit("room:rejoin", { roomId });
+    }
+  };
+
   const leaveRoom = () => {
     if (roomId) {
       socket.emit("room:leave", { roomId });
@@ -127,6 +153,7 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUsers({});
     setIsAdmin(false);
     setPhase("lobby");
+    setRematchAvailable(false);
     setError(null);
     setCurrentScreen("home");
   };
@@ -141,6 +168,7 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         phase,
         timeLimit,
         leaderboard,
+        rematchAvailable,
         error,
         setError,
         createRoom,
@@ -149,6 +177,8 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         leaveRoom,
         emitProgress,
         emitFinish,
+        requestRematch,
+        rejoinLobby,
       }}
     >
       {children}

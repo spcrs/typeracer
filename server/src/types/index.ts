@@ -34,6 +34,8 @@ export interface ClientToServerEvents {
   "race:progress": (data: { roomId: string; progress: number; wpm: number; accuracy: number }) => void;
   "race:finish": (data: { roomId: string; wpm: number; accuracy: number; timeTaken: number }) => void;
   "room:leave": (data: { roomId: string }) => void;
+  "room:rematch": (data: { roomId: string }) => void;
+  "room:rejoin": (data: { roomId: string }) => void;
 }
 
 export interface ServerToClientEvents {
@@ -45,6 +47,8 @@ export interface ServerToClientEvents {
   "race:update": (data: { users: Record<string, RoomUser> }) => void;
   "race:end": (data: { leaderboard: LeaderboardEntry[] }) => void;
   "room:error": (data: { message: string }) => void;
+  "room:rematch_ready": () => void;
+  "room:closed": (data: { message: string }) => void;
 }
 
 export interface SocketData {

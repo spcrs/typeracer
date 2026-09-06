@@ -12,6 +12,7 @@ import {
   removeUserFromRoom,
   rooms,
 } from "../rooms";
+import { getParagraphByWordCount } from "../data/paragraphs";
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
@@ -55,8 +56,23 @@ export const generateLeaderboard = (roomId: string): LeaderboardEntry[] => {
   return entries;
 };
 
+// Concludes the race but keeps the room alive in memory for rematching
+const concludeRace = (cleanRoomId: string, io: TypedServer) => {
+  const room = getRoom(cleanRoomId);
+  if (!room || room.status === "finished") return;
+
+  room.status = "finished";
+  if (room.timerRef) {
+    clearInterval(room.timerRef);
+    room.timerRef = null;
+  }
+
+  const leaderboard = generateLeaderboard(cleanRoomId);
+  io.to(cleanRoomId).emit("race:end", { leaderboard });
+};
+
 export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
-  // 1. Admin creates a room
+  // 1. Create Room
   socket.on("room:create", ({ nickname, wordCount, timeLimit }) => {
     const safeWordCount = Math.min(Math.max(wordCount, 25), 500);
     const safeTimeLimit = Math.min(Math.max(timeLimit, 30), 300);
@@ -69,7 +85,7 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
     socket.emit("room:created", { roomId: room.id, paragraph: room.paragraph });
   });
 
-  // 2. User joins an room
+  // 2. Join Room
   socket.on("room:join", ({ nickname, roomId }) => {
     const cleanRoomId = roomId.trim().toUpperCase();
     const room = getRoom(cleanRoomId);
@@ -142,12 +158,12 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
       );
 
       if (remaining <= 0 || allFinished) {
-        finalizeAndTeardownRoom(cleanRoomId, io);
+        concludeRace(cleanRoomId, io);
       }
     }, 1000);
   });
 
-  // 4. Real-time progress updates from racers
+  // 4. Progress Updates
   socket.on("race:progress", ({ roomId, progress, wpm, accuracy }) => {
     const cleanRoomId = roomId.trim().toUpperCase();
     const room = getRoom(cleanRoomId);
@@ -158,15 +174,13 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
       user.progress = progress;
       user.wpm = wpm;
       user.accuracy = accuracy;
-
-      // Broadcast updated roster progress to all clients in room
       io.to(cleanRoomId).emit("race:update", {
         users: usersMapToObject(room.users),
       });
     }
   });
 
-  // 5. User finishes typing the full paragraph
+  // 5. User Finished
   socket.on("race:finish", ({ roomId, wpm, accuracy }) => {
     const cleanRoomId = roomId.trim().toUpperCase();
     const room = getRoom(cleanRoomId);
@@ -184,23 +198,83 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
         users: usersMapToObject(room.users),
       });
 
-      // End immediately if everyone is done
       const allFinished = Array.from(room.users.values()).every(
         (u) => u.status === "finished"
       );
 
       if (allFinished) {
-        finalizeAndTeardownRoom(cleanRoomId, io);
+        concludeRace(cleanRoomId, io);
       }
     }
   });
 
-  // 6. User leaves room
+  // 6. Rematch Trigger (Admin only)
+  socket.on("room:rematch", ({ roomId }) => {
+    const cleanRoomId = roomId.trim().toUpperCase();
+    const room = getRoom(cleanRoomId);
+    if (!room || room.adminId !== socket.id) return;
+
+    // Reset room state
+    room.status = "lobby";
+    room.startedAt = null;
+    room.paragraph = getParagraphByWordCount(room.settings.wordCount);
+
+    // Filter roster: keep only the host initially, others must rejoin
+    const hostUser = room.users.get(socket.id);
+    room.users.clear();
+    if (hostUser) {
+      room.users.set(socket.id, {
+        nickname: hostUser.nickname,
+        progress: 0,
+        wpm: 0,
+        accuracy: 100,
+        finishedAt: null,
+        status: "racing",
+      });
+    }
+
+    // Tell the admin their lobby is ready with the new paragraph
+    socket.emit("room:created", { roomId: room.id, paragraph: room.paragraph });
+
+    // Inform lingering racers in the room that rematch lobby is open
+    socket.to(cleanRoomId).emit("room:rematch_ready");
+  });
+
+  // 7. Rejoin Trigger (Non-host re-entering lobby)
+  socket.on("room:rejoin", ({ roomId }) => {
+    const cleanRoomId = roomId.trim().toUpperCase();
+    const room = getRoom(cleanRoomId);
+    const nickname = socket.data.nickname || "Racer";
+
+    if (!room || room.status !== "lobby") {
+      socket.emit("room:error", { message: "Match already in progress or room closed." });
+      return;
+    }
+
+    room.users.set(socket.id, {
+      nickname,
+      progress: 0,
+      wpm: 0,
+      accuracy: 100,
+      finishedAt: null,
+      status: "racing",
+    });
+
+    const usersRecord = usersMapToObject(room.users);
+    socket.emit("room:joined", {
+      roomId: room.id,
+      paragraph: room.paragraph,
+      users: usersRecord,
+    });
+    io.to(cleanRoomId).emit("room:updated", { users: usersRecord });
+  });
+
+  // 8. User Leaves
   socket.on("room:leave", ({ roomId }) => {
     handleLeave(roomId);
   });
 
-  // 7. Disconnect cleanup
+  // 9. Disconnect Cleanup
   socket.on("disconnect", () => {
     if (socket.data.roomId) {
       handleLeave(socket.data.roomId);
@@ -215,14 +289,16 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
     socket.leave(cleanRoomId);
     socket.data.roomId = undefined;
 
+    const isHost = room.adminId === socket.id;
     const result = removeUserFromRoom(cleanRoomId, socket.id);
     if (!result) return;
 
-    if (result.roomDeleted) {
-      io.to(cleanRoomId).emit("room:error", {
-        message: result.adminLeft
-          ? "Host closed the room or left."
-          : "Room was closed.",
+    // If host left, completely close the room and alert everyone
+    if (isHost) {
+      if (room.timerRef) clearInterval(room.timerRef);
+      rooms.delete(cleanRoomId);
+      io.to(cleanRoomId).emit("room:closed", {
+        message: "The host has left. The room is now closed.",
       });
     } else {
       io.to(cleanRoomId).emit("room:updated", {
@@ -232,29 +308,3 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
   }
 };
 
-// Helper to dismantle the room after broadcasting results
-const finalizeAndTeardownRoom = (cleanRoomId: string, io: TypedServer) => {
-  const room = getRoom(cleanRoomId);
-  if (!room || room.status === "finished") return;
-
-  room.status = "finished";
-  if (room.timerRef) {
-    clearInterval(room.timerRef);
-    room.timerRef = null;
-  }
-
-  const leaderboard = generateLeaderboard(cleanRoomId);
-  io.to(cleanRoomId).emit("race:end", { leaderboard });
-
-  // Disassociate socket data references
-  room.users.forEach((_user, socketId) => {
-    const s = io.sockets.sockets.get(socketId);
-    if (s) {
-      s.data.roomId = undefined;
-      s.leave(cleanRoomId);
-    }
-  });
-
-  // Remove room from in-memory Map
-  rooms.delete(cleanRoomId);
-};

@@ -3,7 +3,15 @@ import { useApp } from "../../../context/useAppContext";
 import { useRoom } from "../../../context/userRoomContext";
 
 export const Leaderboard: React.FC = () => {
-  const { leaderboard, leaveRoom } = useRoom();
+  const {
+    leaderboard,
+    leaveRoom,
+    isAdmin,
+    requestRematch,
+    rejoinLobby,
+    rematchAvailable,
+    error,
+  } = useRoom();
   const { nickname } = useApp();
 
   const getRankBadge = (rank: number) => {
@@ -26,6 +34,13 @@ export const Leaderboard: React.FC = () => {
       </span>
       <h2 className="text-3xl font-black text-white mb-6 tracking-tight">Race Standings</h2>
 
+      {/* Host left banner notification */}
+      {error && (
+        <div className="w-full mb-6 p-4 bg-rose-950/40 border border-rose-800/60 rounded-xl text-center text-rose-300 text-sm">
+          {error}
+        </div>
+      )}
+
       {/* Standings Table */}
       <div className="w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60 mb-8">
         <table className="w-full text-left border-collapse">
@@ -46,16 +61,12 @@ export const Leaderboard: React.FC = () => {
                 <tr
                   key={entry.rank + entry.nickname}
                   className={`transition-colors ${
-                    isSelf
-                      ? "bg-indigo-950/30 font-medium"
-                      : "hover:bg-slate-800/20"
+                    isSelf ? "bg-indigo-950/30 font-medium" : "hover:bg-slate-800/20"
                   }`}
                 >
-                  <td className="py-3.5 px-4 text-center w-12">
-                    {getRankBadge(entry.rank)}
-                  </td>
+                  <td className="py-3.5 px-4 text-center w-12">{getRankBadge(entry.rank)}</td>
                   <td className="py-3.5 px-4">
-                    <span className={`${isSelf ? "text-indigo-300 font-bold" : "text-slate-200"}`}>
+                    <span className={isSelf ? "text-indigo-300 font-bold" : "text-slate-200"}>
                       {entry.nickname}
                     </span>
                     {isSelf && (
@@ -91,13 +102,44 @@ export const Leaderboard: React.FC = () => {
         </table>
       </div>
 
-      {/* Navigation Return Button */}
-      <button
-        onClick={leaveRoom}
-        className="w-full max-w-xs py-3.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-950/50 cursor-pointer"
-      >
-        Back to Home
-      </button>
+      {/* Action Buttons */}
+      <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md justify-center">
+        {/* Host controls */}
+        {isAdmin && !error && (
+          <button
+            onClick={requestRematch}
+            className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-950/50 cursor-pointer"
+          >
+            Start Rematch
+          </button>
+        )}
+
+        {/* Non-host controls: Only shows if host opened a rematch and has not left */}
+        {!isAdmin && rematchAvailable && !error && (
+          <button
+            onClick={rejoinLobby}
+            className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl transition shadow-lg shadow-emerald-950/50 animate-pulse cursor-pointer"
+          >
+            Rejoin Lobby
+          </button>
+        )}
+
+        {/* Universal Exit */}
+        <button
+          onClick={leaveRoom}
+          className="flex-1 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl border border-slate-700 transition cursor-pointer"
+        >
+          {error ? "Back to Home" : "Leave Room"}
+        </button>
+      </div>
+
+      {/* Non-host waiting status if rematch is not yet clicked */}
+      {!isAdmin && !rematchAvailable && !error && (
+        <p className="text-xs text-slate-500 mt-4 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-500 animate-ping" />
+          Waiting for host to start a rematch...
+        </p>
+      )}
     </div>
   );
 };

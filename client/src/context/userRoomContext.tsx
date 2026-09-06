@@ -11,6 +11,7 @@ interface RoomContextType {
   timeLimit: number;
   leaderboard: LeaderboardEntry[];
   error: string | null;
+  rematchAvailable: boolean;
   setError: (msg: string | null) => void;
   createRoom: (wordCount: number, timeLimit: number) => void;
   joinRoom: (id: string) => void;
@@ -18,6 +19,8 @@ interface RoomContextType {
   leaveRoom: () => void;
   emitProgress: (progress: number, wpm: number, accuracy: number) => void;
   emitFinish: (wpm: number, accuracy: number, timeTaken: number) => void;
+  requestRematch: () => void;
+  rejoinLobby: () => void;
 }
 
 export const RoomContext = createContext<RoomContextType | undefined>(undefined);
