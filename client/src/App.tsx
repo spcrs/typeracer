@@ -3,6 +3,7 @@ import { AppProvider } from './context/AppContext';
 import { useApp } from './context/useAppContext';
 import { NicknameScreen } from './components/Nickname';
 import { HomeScreen } from './components/Home';
+import { SoloScreen } from './components/Solo';
 
 const MainView: React.FC = () => {
   const { currentScreen, isConnected, nickname, setCurrentScreen } = useApp();
@@ -41,12 +42,10 @@ const MainView: React.FC = () => {
       </header>
 
       {/* Screen Router */}
-      <main className="flex-1 flex items-center justify-center w-full">
+      <main className="flex-1 flex items-center justify-center w-full my-8">
         {currentScreen === 'nickname' && <NicknameScreen />}
         {currentScreen === 'home' && <HomeScreen />}
-        {currentScreen === 'solo' && (
-          <div className="text-center text-slate-400">Solo Screen (Phase 2)</div>
-        )}
+        {currentScreen === 'solo' && <SoloScreen />}
         {currentScreen === 'team' && (
           <div className="text-center text-slate-400">Team Screen (Phase 3)</div>
         )}
