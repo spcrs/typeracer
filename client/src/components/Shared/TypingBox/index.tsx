@@ -25,14 +25,12 @@ export const TypingBox: React.FC<TypingBoxProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const activeWordRef = useRef<HTMLSpanElement>(null);
 
-  // Auto-focus input box
   useEffect(() => {
     if (!disabled) {
       inputRef.current?.focus();
     }
   }, [disabled, currentWordIndex]);
 
-  // Auto-scroll the active word into the visible viewport
   useEffect(() => {
     if (activeWordRef.current && containerRef.current) {
       const container = containerRef.current;
@@ -43,7 +41,6 @@ export const TypingBox: React.FC<TypingBoxProps> = ({
       const containerTop = container.scrollTop;
       const containerHeight = container.clientHeight;
 
-      // Keep active line vertically centered in the scroll window
       if (
         elementTop < containerTop ||
         elementTop + elementHeight > containerTop + containerHeight
@@ -59,14 +56,16 @@ export const TypingBox: React.FC<TypingBoxProps> = ({
   return (
     <div
       onClick={() => inputRef.current?.focus()}
-      className="relative w-full bg-slate-900 border border-slate-700/80 rounded-2xl p-6 shadow-2xl cursor-text select-none"
+      className={`relative w-full bg-slate-900/90 border border-slate-700/70 rounded-3xl p-6 sm:p-8 shadow-2xl cursor-text select-none transition-all duration-300 ${
+        !disabled ? "hover:border-indigo-500/50" : "opacity-90"
+      }`}
     >
-      {/* Scrollable Viewport for Target Passage */}
+      {/* Scrollable Viewport */}
       <div
         ref={containerRef}
-        className="max-h-48 overflow-y-auto pr-2 mb-6 scroll-smooth [scrollbar-width:thin] [scrollbar-color:#4f46e5_#0f172a]"
+        className="max-h-52 overflow-y-auto pr-3 mb-6 scroll-smooth [scrollbar-width:thin] [scrollbar-color:#4f46e5_#090d16]"
       >
-        <div className="flex flex-wrap gap-x-2 gap-y-3 text-lg sm:text-xl font-mono leading-relaxed">
+        <div className="flex flex-wrap gap-x-2 gap-y-3.5 text-lg sm:text-2xl font-mono leading-relaxed">
           {targetWords.map((word, wordIdx) => {
             const isCurrent = wordIdx === currentWordIndex;
             const typed = isCurrent ? currentInput : typedWords[wordIdx] || "";
@@ -81,22 +80,22 @@ export const TypingBox: React.FC<TypingBoxProps> = ({
                   e.stopPropagation();
                   onSelectWord(wordIdx);
                 }}
-                className={`relative px-1.5 py-0.5 rounded cursor-pointer transition-all duration-100 ${
+               className={`relative px-1.5 py-0.5 rounded-md cursor-pointer transition-all duration-150 inline-flex items-center ${
                   isCurrent
-                    ? "bg-slate-800 ring-2 ring-indigo-500/50"
+                    ? "bg-slate-800/80 ring-1.5 ring-indigo-500 shadow-sm"
                     : isIncorrect
                     ? "bg-rose-950/40 underline decoration-rose-500 underline-offset-4 decoration-2"
                     : "hover:bg-slate-800/40"
                 }`}
               >
                 {word.split("").map((char, charIdx) => {
-                  let charColor = "text-slate-500"; // Untyped
+                  let charColor = "text-slate-500"; // Untyped character
 
                   if (charIdx < typed.length) {
                     charColor =
                       typed[charIdx] === char
-                        ? "text-emerald-400"
-                        : "text-rose-400 bg-rose-500/20";
+                        ? "text-emerald-400 font-medium"
+                        : "text-rose-400 bg-rose-500/25 rounded-sm";
                   }
 
                   return (
@@ -106,9 +105,9 @@ export const TypingBox: React.FC<TypingBoxProps> = ({
                   );
                 })}
 
-                {/* Extra overflowing characters typed incorrectly */}
+                {/* Overflow characters typed incorrectly */}
                 {typed.length > word.length && (
-                  <span className="text-rose-400 bg-rose-500/20">
+                  <span className="text-rose-400 bg-rose-500/25 rounded-sm">
                     {typed.slice(word.length)}
                   </span>
                 )}
@@ -118,7 +117,7 @@ export const TypingBox: React.FC<TypingBoxProps> = ({
         </div>
       </div>
 
-      {/* Input Field */}
+      {/* Input Field with Custom Indicator */}
       <div className="relative">
         <input
           ref={inputRef}
@@ -127,8 +126,8 @@ export const TypingBox: React.FC<TypingBoxProps> = ({
           onChange={onInputChange}
           onKeyDown={onKeyDown}
           disabled={disabled}
-          placeholder={disabled ? "Race completed!" : "Type here... (Press space for next word)"}
-          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono text-base shadow-inner"
+          placeholder={disabled ? "Race complete!" : "Type the words above... (Space for next word)"}
+          className="w-full bg-slate-950 border border-slate-700/80 rounded-2xl px-5 py-4 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono text-lg shadow-inner transition"
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"

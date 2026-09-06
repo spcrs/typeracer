@@ -49,13 +49,21 @@ export const useTyping = (targetText: string) => {
     };
   }, [startTime, isCompleted]);
 
-  const checkRaceCompletion = (wordsState: string[]) => {
-    const allMatch = targetWords.every((target, idx) => (wordsState[idx] || "") === target);
+  const checkRaceCompletion = useCallback(
+  (wordsState: string[]) => {
+    if (targetWords.length === 0) return;
+
+    const allMatch = targetWords.every(
+      (target, idx) => (wordsState[idx] || "") === target
+    );
+
     if (allMatch) {
       setIsCompleted(true);
       if (timerRef.current) clearInterval(timerRef.current);
     }
-  };
+  },
+  [targetWords]
+);
 
   // Handle single character / word updates
   const handleInputChange = useCallback(
@@ -72,8 +80,9 @@ export const useTyping = (targetText: string) => {
 
       const targetWord = targetWords[currentWordIndex] || "";
 
+      // Spacebar Navigation
       if (val.endsWith(" ")) {
-        const trimmedVal = val.trim();
+        const trimmedVal = val.slice(0, -1); // Remove space
         const updated = [...typedWords];
         updated[currentWordIndex] = trimmedVal;
         setTypedWords(updated);
@@ -84,15 +93,18 @@ export const useTyping = (targetText: string) => {
         }
         setCorrectKeystrokes((prev) => prev + wordCorrectChars);
 
+        // Advance to next word if not at the end
         if (currentWordIndex < targetWords.length - 1) {
           setCurrentWordIndex((prev) => prev + 1);
           setCurrentInput(typedWords[currentWordIndex + 1] || "");
-        } else {
-          checkRaceCompletion(updated);
         }
+        
+        // ALWAYS check for completion (in case jumping back to fix the last remaining error)
+        checkRaceCompletion(updated);
         return;
       }
 
+      // Normal Character Typing
       const lastChar = val[val.length - 1];
       const expectedChar = targetWord[val.length - 1];
       if (lastChar && lastChar === expectedChar) {
@@ -104,11 +116,17 @@ export const useTyping = (targetText: string) => {
       updated[currentWordIndex] = val;
       setTypedWords(updated);
 
-      if (currentWordIndex === targetWords.length - 1 && val === targetWord) {
-        checkRaceCompletion(updated);
-      }
+      // ALWAYS check for completion on every single keystroke
+      checkRaceCompletion(updated);
     },
-    [currentWordIndex, typedWords, targetWords, startTime, isCompleted]
+    [
+      currentWordIndex,
+      typedWords,
+      targetWords,
+      startTime,
+      isCompleted,
+      checkRaceCompletion,
+    ]
   );
 
   const selectWord = useCallback(
