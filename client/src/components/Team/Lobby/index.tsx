@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { useRoom } from "../../../context/userRoomContext";
 
+
+
 export const Lobby: React.FC = () => {
-  const { roomId, users, isAdmin, leaveRoom } = useRoom();
+  const { roomId, users, isAdmin, leaveRoom, startRace } = useRoom();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -81,11 +83,8 @@ export const Lobby: React.FC = () => {
 
         {isAdmin ? (
           <button
-            onClick={() => {
-              // Wired in Phase 4 to start race
-              alert("Starting race logic arrives in Phase 4!");
-            }}
-            className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg"
+            onClick={startRace}
+            className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold rounded-xl transition shadow-lg cursor-pointer"
           >
             Start Race
           </button>

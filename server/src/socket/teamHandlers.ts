@@ -1,5 +1,10 @@
 import type { Socket, Server } from "socket.io";
-import type { ClientToServerEvents, ServerToClientEvents, SocketData } from "../types/index.js";
+import type {
+  ClientToServerEvents,
+  ServerToClientEvents,
+  SocketData,
+  LeaderboardEntry,
+} from "../types/index";
 import {
   createRoom,
   getRoom,
@@ -9,6 +14,45 @@ import {
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
+
+export const generateLeaderboard = (roomId: string): LeaderboardEntry[] => {
+  const room = getRoom(roomId);
+  if (!room) return [];
+
+  const entries: LeaderboardEntry[] = [];
+
+  room.users.forEach((user) => {
+    entries.push({
+      rank: 0,
+      nickname: user.nickname,
+      wpm: user.wpm,
+      accuracy: user.accuracy,
+      progress: user.progress,
+      timeTaken: user.finishedAt && room.startedAt ? Math.round((user.finishedAt - room.startedAt) / 1000) : null,
+      status: user.status === "finished" ? "Finished" : "Did not finish",
+    });
+  });
+
+  // Ranking logic:
+  // 1. Finished players first (sorted ascending by time taken)
+  // 2. Non-finishers next (sorted descending by % progress, then WPM)
+  entries.sort((a, b) => {
+    if (a.status === "Finished" && b.status === "Finished") {
+      return (a.timeTaken ?? 0) - (b.timeTaken ?? 0);
+    }
+    if (a.status === "Finished") return -1;
+    if (b.status === "Finished") return 1;
+
+    if (b.progress !== a.progress) return b.progress - a.progress;
+    return b.wpm - a.wpm;
+  });
+
+  entries.forEach((entry, idx) => {
+    entry.rank = idx + 1;
+  });
+
+  return entries;
+};
 
 export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
   // 1. Admin creates a room
@@ -24,7 +68,7 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
     socket.emit("room:created", { roomId: room.id, paragraph: room.paragraph });
   });
 
-  // 2. User joins an existing room
+  // 2. User joins an room
   socket.on("room:join", ({ nickname, roomId }) => {
     const cleanRoomId = roomId.trim().toUpperCase();
     const room = getRoom(cleanRoomId);
@@ -71,12 +115,97 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
     socket.to(room.id).emit("room:updated", { users: usersRecord });
   });
 
-  // 3. User voluntarily leaves room
+  // 3. Admin starts race
+  socket.on("room:start", ({ roomId }) => {
+    const cleanRoomId = roomId.trim().toUpperCase();
+    const room = getRoom(cleanRoomId);
+    if (!room || room.adminId !== socket.id || room.status !== "lobby") return;
+
+    room.status = "racing";
+    room.startedAt = Date.now();
+
+    // Broadcast race start with the allotted time limit
+    io.to(cleanRoomId).emit("race:start", {
+      startedAt: room.startedAt,
+      timeLimit: room.settings.timeLimit,
+    });
+
+    // Server-side race timer countdown check
+    let remaining = room.settings.timeLimit;
+    room.timerRef = setInterval(() => {
+      remaining -= 1;
+
+      // Check if all players completed before timer ends
+      const allFinished = Array.from(room.users.values()).every(
+        (u) => u.status === "finished"
+      );
+
+      if (remaining <= 0 || allFinished) {
+        if (room.timerRef) clearInterval(room.timerRef);
+        room.status = "finished";
+        const leaderboard = generateLeaderboard(cleanRoomId);
+        io.to(cleanRoomId).emit("race:end", { leaderboard });
+      }
+    }, 1000);
+  });
+
+  // 4. Real-time progress updates from racers
+  socket.on("race:progress", ({ roomId, progress, wpm, accuracy }) => {
+    const cleanRoomId = roomId.trim().toUpperCase();
+    const room = getRoom(cleanRoomId);
+    if (!room || room.status !== "racing") return;
+
+    const user = room.users.get(socket.id);
+    if (user && user.status === "racing") {
+      user.progress = progress;
+      user.wpm = wpm;
+      user.accuracy = accuracy;
+
+      // Broadcast updated roster progress to all clients in room
+      io.to(cleanRoomId).emit("race:update", {
+        users: usersMapToObject(room.users),
+      });
+    }
+  });
+
+  // 5. User finishes typing the full paragraph
+  socket.on("race:finish", ({ roomId, wpm, accuracy }) => {
+    const cleanRoomId = roomId.trim().toUpperCase();
+    const room = getRoom(cleanRoomId);
+    if (!room || room.status !== "racing") return;
+
+    const user = room.users.get(socket.id);
+    if (user && user.status === "racing") {
+      user.status = "finished";
+      user.progress = 100;
+      user.wpm = wpm;
+      user.accuracy = accuracy;
+      user.finishedAt = Date.now();
+
+      io.to(cleanRoomId).emit("race:update", {
+        users: usersMapToObject(room.users),
+      });
+
+      // End immediately if everyone is done
+      const allFinished = Array.from(room.users.values()).every(
+        (u) => u.status === "finished"
+      );
+
+      if (allFinished) {
+        if (room.timerRef) clearInterval(room.timerRef);
+        room.status = "finished";
+        const leaderboard = generateLeaderboard(cleanRoomId);
+        io.to(cleanRoomId).emit("race:end", { leaderboard });
+      }
+    }
+  });
+
+  // 6. User leaves room
   socket.on("room:leave", ({ roomId }) => {
     handleLeave(roomId);
   });
 
-  // 4. Disconnect cleanup
+  // 7. Disconnect cleanup
   socket.on("disconnect", () => {
     if (socket.data.roomId) {
       handleLeave(socket.data.roomId);
@@ -97,7 +226,7 @@ export const registerTeamHandlers = (io: TypedServer, socket: TypedSocket) => {
     if (result.roomDeleted) {
       io.to(cleanRoomId).emit("room:error", {
         message: result.adminLeft
-          ? "Host closed the room or left the lobby."
+          ? "Host closed the room or left."
           : "Room was closed.",
       });
     } else {

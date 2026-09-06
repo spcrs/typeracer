@@ -1,7 +1,8 @@
 import React, { useState, useEffect, type ReactNode } from "react";
 import { useApp } from "./useAppContext";
-import type { RoomUser } from "../types";
+import type { RoomUser, LeaderboardEntry, RoomPhase } from "../types";
 import { RoomContext } from "./userRoomContext";
+
 
 export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { socket, nickname, setCurrentScreen } = useApp();
@@ -9,6 +10,9 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [paragraph, setParagraph] = useState<string>("");
   const [users, setUsers] = useState<Record<string, RoomUser>>({});
   const [isAdmin, setIsAdmin] = useState(false);
+  const [phase, setPhase] = useState<RoomPhase>("lobby");
+  const [timeLimit, setTimeLimit] = useState(120);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -16,6 +20,7 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setRoomId(data.roomId);
       setParagraph(data.paragraph);
       setIsAdmin(true);
+      setPhase("lobby");
       setError(null);
       setUsers({
         [socket.id || "admin"]: {
@@ -38,6 +43,7 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setParagraph(data.paragraph);
       setUsers(data.users);
       setIsAdmin(false);
+      setPhase("lobby");
       setError(null);
     };
 
@@ -45,20 +51,41 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUsers(data.users);
     };
 
+    const handleRaceStart = (data: { startedAt: number; timeLimit: number }) => {
+      setTimeLimit(data.timeLimit);
+      setPhase("countdown");
+    };
+
+    const handleRaceUpdate = (data: { users: Record<string, RoomUser> }) => {
+      setUsers(data.users);
+    };
+
+    const handleRaceEnd = (data: { leaderboard: LeaderboardEntry[] }) => {
+      setLeaderboard(data.leaderboard);
+      setPhase("leaderboard");
+    };
+
     const handleRoomError = (data: { message: string }) => {
       setError(data.message);
       setRoomId(null);
+      setPhase("lobby");
     };
 
     socket.on("room:created", handleRoomCreated);
     socket.on("room:joined", handleRoomJoined);
     socket.on("room:updated", handleRoomUpdated);
+    socket.on("race:start", handleRaceStart);
+    socket.on("race:update", handleRaceUpdate);
+    socket.on("race:end", handleRaceEnd);
     socket.on("room:error", handleRoomError);
 
     return () => {
       socket.off("room:created", handleRoomCreated);
       socket.off("room:joined", handleRoomJoined);
       socket.off("room:updated", handleRoomUpdated);
+      socket.off("race:start", handleRaceStart);
+      socket.off("race:update", handleRaceUpdate);
+      socket.off("race:end", handleRaceEnd);
       socket.off("room:error", handleRoomError);
     };
   }, [socket, nickname]);
@@ -73,6 +100,24 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     socket.emit("room:join", { nickname, roomId: id });
   };
 
+  const startRace = () => {
+    if (roomId && isAdmin) {
+      socket.emit("room:start", { roomId });
+    }
+  };
+
+  const emitProgress = (progress: number, wpm: number, accuracy: number) => {
+    if (roomId) {
+      socket.emit("race:progress", { roomId, progress, wpm, accuracy });
+    }
+  };
+
+  const emitFinish = (wpm: number, accuracy: number, timeTaken: number) => {
+    if (roomId) {
+      socket.emit("race:finish", { roomId, wpm, accuracy, timeTaken });
+    }
+  };
+
   const leaveRoom = () => {
     if (roomId) {
       socket.emit("room:leave", { roomId });
@@ -81,6 +126,7 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setParagraph("");
     setUsers({});
     setIsAdmin(false);
+    setPhase("lobby");
     setError(null);
     setCurrentScreen("home");
   };
@@ -92,11 +138,17 @@ export const RoomProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         paragraph,
         users,
         isAdmin,
+        phase,
+        timeLimit,
+        leaderboard,
         error,
         setError,
         createRoom,
         joinRoom,
+        startRace,
         leaveRoom,
+        emitProgress,
+        emitFinish,
       }}
     >
       {children}

@@ -4,15 +4,24 @@ import { useApp } from "../../context/useAppContext";
 import { CreateRoom } from "./CreateRoom";
 import { JoinRoom } from "./JoinRoom";
 import { Lobby } from "./Lobby";
+import { LiveRace } from "./Race";
 import { useRoom } from "../../context/userRoomContext";
 
 const TeamFlow: React.FC = () => {
-  const { roomId, error } = useRoom();
+  const { roomId, phase, error } = useRoom();
   const { setCurrentScreen } = useApp();
   const [subView, setSubView] = useState<"menu" | "create" | "join">("menu");
 
   if (roomId) {
-    return <Lobby />;
+    if (phase === "lobby") {
+      return <Lobby />;
+    }
+    if (phase === "countdown" || phase === "racing") {
+      return <LiveRace />;
+    }
+    if (phase === "leaderboard") {
+      return <div className="text-white text-center">Leaderboard arriving in Phase 5...</div>;
+    }
   }
 
   if (subView === "create") {

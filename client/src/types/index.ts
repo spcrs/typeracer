@@ -51,3 +51,5 @@ export interface SocketData {
   nickname?: string;
   roomId?: string;
 }
+
+export type RoomPhase = "lobby" | "countdown" | "racing" | "leaderboard";
