@@ -1,5 +1,5 @@
-import type { Room, RoomUser } from "./types/index.js";
-import { getParagraphByWordCount } from "./data/paragraphs.js";
+import type { Room, RoomUser } from "./types/index";
+import { getParagraphByWordCount } from "./data/paragraphs";
 
 export const rooms = new Map<string, Room>();
 

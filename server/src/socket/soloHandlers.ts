@@ -1,6 +1,6 @@
 import type { Socket, Server } from "socket.io";
-import type { ClientToServerEvents, ServerToClientEvents, SocketData } from "../types/index.js";
-import { getRandomParagraph } from "../data/paragraphs.js";
+import type { ClientToServerEvents, ServerToClientEvents, SocketData } from "../types/index";
+import { getRandomParagraph } from "../data/paragraphs";
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
