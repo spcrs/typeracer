@@ -11,9 +11,15 @@ app.use(cors());
 
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.CLIENT_URL, // Injected via deployment dashboard
+].filter(Boolean) as string[];
+
+
 const io = new Server<ClientToServerEvents, ServerToClientEvents, {}, SocketData>(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: allowedOrigins.length > 0 ? allowedOrigins : "*",
     methods: ["GET", "POST"],
   },
 });
@@ -29,6 +35,6 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 5001;
-server.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
+server.listen(Number(PORT), "0.0.0.0", () => {
+  console.log(`Server listening on port ${PORT}`);
 });

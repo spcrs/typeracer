@@ -1,0 +1,45 @@
+name: Build & Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'server/**'
+      - '.github/workflows/backend.yml'
+
+concurrency:
+  group: 'backend-deploy'
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Type-Check & Build
+        working-directory: server
+        run: npm run build
+
+      # Optional: Trigger Render to deploy using a Deploy Hook URL
+      # Obtain from Render Dashboard -> Service -> Settings -> Deploy Hook
+      - name: Trigger Render Deploy
+        if: success()
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK" ]; then
+            curl -X POST "$RENDER_DEPLOY_HOOK"
+          fi
