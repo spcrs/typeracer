@@ -5,7 +5,7 @@ import { TypingBox } from "../../Shared/TypingBox";
 import { ProgressBar } from "../../Shared/ProgressBar";
 import type { RoomUser } from "../../../types";
 import { useRoom } from "../../../context/userRoomContext";
-import { Countdown } from "./CountDown";
+import { Countdown } from "./Countdown";
 
 export const LiveRace: React.FC = () => {
   const { paragraph, users, timeLimit, emitProgress, emitFinish, leaveRoom } = useRoom();
